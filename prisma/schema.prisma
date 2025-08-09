@@ -1,0 +1,432 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Thay đổi từ "mysql" thành "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String              @id @default(uuid())
+  name               String
+  email              String              @unique
+  password           String
+  phone              String?
+  avatar             String? // Đường dẫn ảnh (sẽ lấy từ Image)
+  avatarId           String?             @unique
+  image              Image?              @relation("UserToImage")
+  role               Role                @default(USER)
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  // Thêm quan hệ ngược lại với Event
+  events             Event[]             @relation("EventAuthor") // Danh sách các Event mà User là tác giả
+  homepageSections   HomepageSection[]
+  eventRegistrations EventRegistration[]
+  // Thêm quan hệ với News, Comment, Like
+  news               News[]              @relation("NewsAuthor")
+  comments           Comment[]
+  likes              Like[]
+  galleryImages      GalleryImage[]      @relation("UserToGallery") // Ảnh do User tải lên
+
+  @@map("users")
+}
+
+model Homepage {
+  id        String            @id @default(uuid())
+  name      String            @unique
+  sections  HomepageSection[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@map("homepages")
+}
+
+model HomepageSection {
+  id         String   @id @default(uuid())
+  homepageId String
+  type       String // HeroSection, AboutSection, ...
+  name       String?
+  order      Int      @default(0)
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  homepage Homepage @relation(fields: [homepageId], references: [id], onDelete: Cascade)
+  User     User?    @relation(fields: [userId], references: [id])
+  userId   String?
+
+  // Relationships to specific section types
+  hero          HeroSection?
+  about         AboutSection?
+  events        EventsSection?
+  news          NewsSection?
+  team          TeamSection?
+  gallery       GallerySection?
+  cta           CTASection?
+  aboutFeatures AboutFeatures?
+  countdown     CountdownTimer?
+  story         SportsCommunityStory?
+  stats         StatsSection?
+
+  @@index([homepageId, order])
+  @@map("homepage_sections")
+}
+
+// Models for specific section types
+model HeroSection {
+  id                String          @id @default(uuid())
+  title             String
+  subtitle          String
+  subtitle1         String?
+  backgroundImage   String
+  date              String
+  location          String
+  logo              String?
+  primaryButtonText String
+  showAnimations    Boolean         @default(true)
+  section           HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId         String          @unique
+
+  @@map("hero_sections")
+}
+
+model AboutSection {
+  id              String          @id @default(uuid())
+  title           String
+  title1          String
+  description     String          @db.Text
+  backgroundColor String?
+  section         HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId       String          @unique
+
+  @@map("about_sections")
+}
+
+model EventsSection {
+  id                String          @id @default(uuid())
+  title             String
+  title1            String
+  description       String          @db.Text
+  backgroundColor   String?
+  showViewAllButton Boolean         @default(true)
+  section           HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId         String          @unique
+
+  @@map("events_sections")
+}
+
+model NewsSection {
+  id                String          @id @default(uuid())
+  title             String
+  title1            String
+  description       String          @db.Text
+  postsPerRow       Int             @default(3)
+  showViewAllButton Boolean         @default(true)
+  section           HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId         String          @unique
+
+  @@map("news_sections")
+}
+
+model TeamSection {
+  id              String          @id @default(uuid())
+  title           String
+  description     String          @db.Text
+  backgroundColor String?
+  membersPerRow   Int             @default(4)
+  section         HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId       String          @unique
+
+  @@map("team_sections")
+}
+
+model GallerySection {
+  id           String          @id @default(uuid())
+  title        String
+  autoPlay     Boolean         @default(false)
+  showControls Boolean         @default(true)
+  section      HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId    String          @unique
+
+  @@map("gallery_sections")
+}
+
+model CTASection {
+  id              String          @id @default(uuid())
+  title           String
+  description     String          @db.Text
+  buttonText      String
+  backgroundColor String?
+  section         HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId       String          @unique
+
+  @@map("cta_sections")
+}
+
+model AboutFeatures {
+  id            String          @id @default(uuid())
+  features      Json // Lưu mảng features
+  customClasses String?
+  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId     String          @unique
+
+  @@map("about_features")
+}
+
+model CountdownTimer {
+  id            String          @id @default(uuid())
+  eventDate     String
+  customClasses String?
+  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId     String          @unique
+
+  @@map("countdown_timers")
+}
+
+model SportsCommunityStory {
+  id            String          @id @default(uuid())
+  subtitle      String
+  title         String
+  paragraph1    String          @db.Text
+  paragraph2    String          @db.Text
+  paragraph3    String          @db.Text
+  paragraph4    String          @db.Text
+  image         String
+  statsValue    String
+  statsLabel    String
+  customClasses String?
+  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId     String          @unique
+
+  @@map("sports_community_stories")
+}
+
+model StatsSection {
+  id            String          @id @default(uuid())
+  stats         Json // Lưu mảng stats
+  customClasses String?
+  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId     String          @unique
+
+  @@map("stats_sections")
+}
+
+model Image {
+  id        String   @id @default(uuid())
+  url       String // Đường dẫn ảnh (ví dụ: /image/avatars/avatar_123.jpg hoặc /image/event_posts/event_123.jpg)
+  type      String // Loại ảnh (avatar, event_post, etc.)
+  user      User?    @relation("UserToImage", fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?  @unique
+  event     Event?   @relation("EventToImage", fields: [eventId], references: [id], onDelete: SetNull)
+  eventId   String?  @unique
+  createdAt DateTime @default(now())
+
+  @@map("images")
+}
+
+model Event {
+  id                   String        @id @default(uuid())
+  name                 String
+  description          String        @db.Text
+  content              String        @db.Text
+  date                 DateTime
+  location             String
+  imageEvent           String? // Đường dẫn ảnh (sẽ lấy từ Image)
+  maxParticipants      Int
+  currentParticipants  Int           @default(0)
+  category             EventCategory
+  status               EventStatus   @default(UPCOMING)
+  distance             String?
+  registrationFee      Int?          @default(0)
+  requirements         String?       @db.Text
+  published            Boolean       @default(true)
+  featured             Boolean       @default(false)
+  registrationDeadline DateTime?
+  organizer            String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  // Relations
+  author        User                @relation("EventAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId      String
+  imageId       String?             @unique
+  image         Image?              @relation("EventToImage")
+  registrations EventRegistration[]
+  galleryImages GalleryImage[]      @relation("EventToGallery") // Ảnh thuộc sự kiện này
+
+  @@map("events")
+}
+
+model EventRegistration {
+  id                String             @id @default(uuid())
+  fullName          String
+  email             String
+  phone             String
+  emergencyContact  String
+  emergencyPhone    String?
+  medicalConditions String?            @db.Text
+  experience        ExperienceLevel
+  status            RegistrationStatus @default(PENDING)
+  registeredAt      DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  // Relations
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  String
+
+  @@unique([eventId, userId])
+  @@map("event_registrations")
+}
+
+// Thêm model News
+model News {
+  id          String       @id @default(uuid())
+  title       String
+  excerpt     String       @db.Text
+  content     String       @db.Text
+  cover       String // Đường dẫn ảnh
+  author      User         @relation("NewsAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId    String
+  category    NewsCategory
+  views       Int          @default(0)
+  featured    Boolean      @default(false)
+  status      NewsStatus   @default(DRAFT)
+  tags        String?      @db.Text // Lưu tags dạng chuỗi ngăn cách bởi dấu phẩy
+  readingTime Int?         @default(5) // Thời gian đọc ước tính (phút)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  comments Comment[]
+  likes    Like[]
+
+  @@index([category, featured])
+  @@index([authorId])
+  @@map("news")
+}
+
+// Model Comment - Bình luận cho bài viết
+model Comment {
+  id        String        @id @default(uuid())
+  content   String        @db.Text
+  news      News          @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  newsId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  status    CommentStatus @default(PENDING)
+  parentId  String? // Để hỗ trợ reply comments
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([newsId])
+  @@index([userId])
+  @@map("comments")
+}
+
+// Model Like - Lưu trữ lượt thích
+model Like {
+  id        String   @id @default(uuid())
+  news      News     @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  newsId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([newsId, userId]) // Mỗi user chỉ có thể thích một bài viết một lần
+  @@map("likes")
+}
+
+// Thêm enum GalleryCategory
+enum GalleryCategory {
+  MARATHON
+  FUN_RUN
+  TRAIL_RUN
+  NIGHT_RUN
+}
+
+// Thêm model GalleryImage
+model GalleryImage {
+  id           String          @id @default(uuid())
+  src          String // Đường dẫn ảnh
+  title        String
+  event        String // Tên sự kiện
+  location     String // Địa điểm
+  year         Int
+  category     GalleryCategory
+  description  String?         @db.Text
+  participants Int?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  // Relations - Liên kết với Event
+  eventRelated Event?  @relation("EventToGallery", fields: [eventId], references: [id], onDelete: SetNull)
+  eventId      String?
+
+  // Relations - Liên kết với User (người đăng ảnh)
+  uploadedBy   User?   @relation("UserToGallery", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedById String?
+
+  @@index([category])
+  @@index([year])
+  @@index([eventId])
+  @@map("gallery_images")
+}
+
+enum Role {
+  USER
+  EDITOR
+  ADMIN
+}
+
+enum EventCategory {
+  MARATHON
+  HALF_MARATHON
+  FIVE_K
+  TEN_K
+  FUN_RUN
+  TRAIL_RUN
+  NIGHT_RUN
+}
+
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  WAITLIST
+  CANCELLED
+}
+
+// Thêm enum cho News
+enum NewsCategory {
+  TRAINING
+  NUTRITION
+  EVENTS
+  TIPS
+}
+
+enum NewsStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum CommentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}

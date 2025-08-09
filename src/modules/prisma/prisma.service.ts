@@ -9,68 +9,41 @@ export class PrismaService
   constructor() {
     super({
       log: ["query", "info", "warn", "error"],
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL,
-        },
-      },
     });
   }
 
   async onModuleInit() {
-    try {
-      await this.$connect();
-      console.log("🔗 Connected to PostgreSQL database");
-    } catch (error) {
-      console.error("❌ Failed to connect to PostgreSQL database:", error);
-      throw error;
-    }
+    await this.$connect();
+    console.log("🔗 Connected to MySQL database");
   }
 
   async onModuleDestroy() {
-    try {
-      await this.$disconnect();
-      console.log("🔌 Disconnected from PostgreSQL database");
-    } catch (error) {
-      console.error("❌ Error disconnecting from database:", error);
-    }
+    await this.$disconnect();
+    console.log("🔌 Disconnected from MySQL database");
   }
 
-  // Helper methods for cleanup - Updated for PostgreSQL
+  // Helper methods for cleanup
   async cleanDatabase() {
     if (process.env.NODE_ENV === "production") return;
 
+    const tablenames = await this.$queryRaw<
+      Array<{ TABLE_NAME: string }>
+    >`SELECT TABLE_NAME from information_schema.TABLES WHERE TABLE_SCHEMA = 'nestjs-restfull';`;
+
+    const tables = tablenames
+      .map(({ TABLE_NAME }) => TABLE_NAME)
+      .filter((name) => name !== "_prisma_migrations");
+
     try {
-      // PostgreSQL syntax để lấy danh sách bảng
-      const tablenames = await this.$queryRaw<
-        Array<{ table_name: string }>
-      >`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';`;
-
-      const tables = tablenames
-        .map(({ table_name }) => table_name)
-        .filter((name) => name !== "_prisma_migrations");
-
-      // PostgreSQL syntax để disable foreign key checks và truncate
-      await this.$executeRawUnsafe(`SET session_replication_role = replica;`);
+      await this.$executeRawUnsafe(`SET FOREIGN_KEY_CHECKS = 0;`);
 
       for (const table of tables) {
-        await this.$executeRawUnsafe(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE;`);
+        await this.$executeRawUnsafe(`TRUNCATE TABLE \`${table}\`;`);
       }
 
-      await this.$executeRawUnsafe(`SET session_replication_role = DEFAULT;`);
+      await this.$executeRawUnsafe(`SET FOREIGN_KEY_CHECKS = 1;`);
     } catch (error) {
-      console.error("❌ Error cleaning database:", error);
-    }
-  }
-
-  // Thêm method để check connection health
-  async checkConnection(): Promise<boolean> {
-    try {
-      await this.$queryRaw`SELECT 1`;
-      return true;
-    } catch (error) {
-      console.error("❌ Database connection check failed:", error);
-      return false;
+      console.log({ error });
     }
   }
 }

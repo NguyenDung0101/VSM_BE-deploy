@@ -22,24 +22,26 @@ export class PrismaService
     console.log("🔌 Disconnected from PostgreSQL database");
   }
 
-  /**
-   * Xóa sạch dữ liệu trong database (dev only)
-   */
+  // Chỉ dùng khi cần dọn dữ liệu trong môi trường dev/test
   async cleanDatabase() {
     if (process.env.NODE_ENV === "production") return;
 
-    const tables = await this.$queryRaw<Array<{ tablename: string }>>`
-      SELECT tablename 
-      FROM pg_tables
-      WHERE schemaname = 'public';
-    `;
+    const schema = "public"; // schema mặc định của PostgreSQL
+
+    const tablenames = await this.$queryRaw<
+      Array<{ tablename: string }>
+    >`SELECT tablename FROM pg_tables WHERE schemaname = ${schema};`;
+
+    const tables = tablenames
+      .map(({ tablename }) => tablename)
+      .filter((name) => name !== "_prisma_migrations");
 
     try {
-      for (const { tablename } of tables) {
-        await this.$executeRawUnsafe(`TRUNCATE TABLE "${tablename}" RESTART IDENTITY CASCADE;`);
+      for (const table of tables) {
+        await this.$executeRawUnsafe(`TRUNCATE TABLE "${schema}"."${table}" RESTART IDENTITY CASCADE;`);
       }
     } catch (error) {
-      console.log({ error });
+      console.error("❌ Error cleaning database:", error);
     }
   }
 }

@@ -14,34 +14,36 @@ export class PrismaService
 
   async onModuleInit() {
     await this.$connect();
-    console.log("🔗 Connected to PostgreSQL database");
+    console.log("🔗 Connected to MySQL database");
   }
 
   async onModuleDestroy() {
     await this.$disconnect();
-    console.log("🔌 Disconnected from PostgreSQL database");
+    console.log("🔌 Disconnected from MySQL database");
   }
 
-  // Chỉ dùng khi cần dọn dữ liệu trong môi trường dev/test
+  // Helper methods for cleanup
   async cleanDatabase() {
     if (process.env.NODE_ENV === "production") return;
 
-    const schema = "public"; // schema mặc định của PostgreSQL
-
     const tablenames = await this.$queryRaw<
-      Array<{ tablename: string }>
-    >`SELECT tablename FROM pg_tables WHERE schemaname = ${schema};`;
+      Array<{ TABLE_NAME: string }>
+    >`SELECT TABLE_NAME from information_schema.TABLES WHERE TABLE_SCHEMA = 'nestjs-restfull';`;
 
     const tables = tablenames
-      .map(({ tablename }) => tablename)
+      .map(({ TABLE_NAME }) => TABLE_NAME)
       .filter((name) => name !== "_prisma_migrations");
 
     try {
+      await this.$executeRawUnsafe(`SET FOREIGN_KEY_CHECKS = 0;`);
+
       for (const table of tables) {
-        await this.$executeRawUnsafe(`TRUNCATE TABLE "${schema}"."${table}" RESTART IDENTITY CASCADE;`);
+        await this.$executeRawUnsafe(`TRUNCATE TABLE \`${table}\`;`);
       }
+
+      await this.$executeRawUnsafe(`SET FOREIGN_KEY_CHECKS = 1;`);
     } catch (error) {
-      console.error("❌ Error cleaning database:", error);
+      console.log({ error });
     }
   }
 }

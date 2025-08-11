@@ -27,13 +27,6 @@ export class PrismaService
     }
   }
 
-  // Gọi method này trong main.ts để đảm bảo đóng connection khi app shutdown
-  async enableShutdownHooks(app: INestApplication) {
-    this.$on("beforeExit", async () => {
-      await app.close();
-    });
-  }
-
   async onModuleDestroy() {
     try {
       await this.$disconnect();
@@ -43,10 +36,12 @@ export class PrismaService
     }
   }
 
+  // Helper methods for cleanup - Updated for PostgreSQL
   async cleanDatabase() {
     if (process.env.NODE_ENV === "production") return;
 
     try {
+      // PostgreSQL syntax để lấy danh sách bảng
       const tablenames = await this.$queryRaw<
         Array<{ table_name: string }>
       >`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';`;
@@ -55,12 +50,11 @@ export class PrismaService
         .map(({ table_name }) => table_name)
         .filter((name) => name !== "_prisma_migrations");
 
+      // PostgreSQL syntax để disable foreign key checks và truncate
       await this.$executeRawUnsafe(`SET session_replication_role = replica;`);
 
       for (const table of tables) {
-        await this.$executeRawUnsafe(
-          `TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE;`
-        );
+        await this.$executeRawUnsafe(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE;`);
       }
 
       await this.$executeRawUnsafe(`SET session_replication_role = DEFAULT;`);
@@ -69,6 +63,7 @@ export class PrismaService
     }
   }
 
+  // Thêm method để check connection health
   async checkConnection(): Promise<boolean> {
     try {
       await this.$queryRaw`SELECT 1`;
@@ -79,10 +74,12 @@ export class PrismaService
     }
   }
 
-   // ✅ Thêm method này
   async enableShutdownHooks(app: INestApplication) {
-    this.$on<any>('beforeExit', async () => {
+    (this as any).$on('beforeExit', async () => {
       await app.close();
     });
   }
+  
+
+  
 }

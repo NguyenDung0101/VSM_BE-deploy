@@ -5,7 +5,7 @@ import { ConfigService } from "@nestjs/config";
 import { AppModule } from "./app.module";
 import * as express from 'express';
 import { join } from 'path';
-import { PrismaService } from "./prisma/prisma.service"; // ✅ Thêm import này
+import { PrismaService } from "./modules/prisma/prisma.service"; // ✅ Thêm import này
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -18,7 +18,7 @@ async function bootstrap() {
 
   // ✅ Đảm bảo Prisma đóng connection khi app shutdown
   const prismaService = app.get(PrismaService);
-  await prismaService.enableShutdownHooks(app);
+  await prismaService.enableShutdownHooks(app); 
 
   // Global validation pipe
   app.useGlobalPipes(

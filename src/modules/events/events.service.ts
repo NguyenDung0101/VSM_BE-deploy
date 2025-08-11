@@ -131,22 +131,37 @@ export class EventsService {
     const {
       category,
       status,
+      published,
       featured,
       search,
-      upcoming = 'true',
+      authorId,
+      startDate,
+      endDate,
+      upcoming = 'false', // Mặc định tắt upcoming filter
       limit = '10',
       page = '1',
     } = query || {};
-
-    const where: any = { published: true };
-
+  
+    const where: any = {};
+  
     if (category) where.category = category;
     if (status) where.status = status;
+    if (published === 'true' || published === 'false') {
+      where.published = published === 'true';
+    }
+    if (authorId) where.authorId = authorId;
+  
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) where.date.gte = new Date(startDate);
+      if (endDate) where.date.lte = new Date(endDate);
+    }
+  
     if (featured === 'true') where.featured = true;
     if (upcoming === 'true') {
       where.date = { gte: new Date() };
     }
-
+  
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -154,14 +169,14 @@ export class EventsService {
         { location: { contains: search, mode: 'insensitive' } },
       ];
     }
-
+  
     const take = parseInt(limit);
     const skip = (parseInt(page) - 1) * take;
-
+  
     const [events, total] = await Promise.all([
       this.prisma.event.findMany({
         where,
-        orderBy: { date: 'asc' },
+        orderBy: { createdAt: 'desc' }, // Thay đổi từ date: 'asc' để giống findAllForAdmin
         take,
         skip,
         include: {
@@ -169,6 +184,7 @@ export class EventsService {
             select: {
               id: true,
               name: true,
+              email: true, // Thêm email để giống findAllForAdmin
             },
           },
           _count: {
@@ -180,7 +196,7 @@ export class EventsService {
       }),
       this.prisma.event.count({ where }),
     ]);
-
+  
     return {
       data: events,
       pagination: {

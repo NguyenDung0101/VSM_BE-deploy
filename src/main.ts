@@ -63,8 +63,8 @@ async function bootstrap() {
   //import image
   app.use('/image', express.static(join(__dirname, '..', 'public', 'image')));
 
-  const port = configService.get("PORT") || 3001;
-  await app.listen(port);
+  const port = process.env.PORT || configService.get("PORT") || 3001;
+  await app.listen(port, '0.0.0.0');
 
   logger.log(`🚀 VSM API Server running on port ${port}`);
   logger.log(`📚 API Documentation: http://localhost:${port}/api/docs`);

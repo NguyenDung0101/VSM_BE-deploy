@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { EventsController } from './events.controller';
 import { EventsService } from './events.service';
-import { UploadModule } from 'src/modules/upload/upload.module';
+import { UploadModule } from '../upload/upload.module';
 
 @Module({
   imports: [UploadModule],

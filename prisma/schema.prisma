@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" // Thay đổi từ "mysql" thành "postgresql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -13,22 +13,20 @@ model User {
   email              String              @unique
   password           String
   phone              String?
-  avatar             String? // Đường dẫn ảnh (sẽ lấy từ Image)
+  avatar             String?
   avatarId           String?             @unique
-  image              Image?              @relation("UserToImage")
   role               Role                @default(USER)
   isActive           Boolean             @default(true)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
-  // Thêm quan hệ ngược lại với Event
-  events             Event[]             @relation("EventAuthor") // Danh sách các Event mà User là tác giả
-  homepageSections   HomepageSection[]
-  eventRegistrations EventRegistration[]
-  // Thêm quan hệ với News, Comment, Like
-  news               News[]              @relation("NewsAuthor")
   comments           Comment[]
+  eventRegistrations EventRegistration[]
+  events             Event[]             @relation("EventAuthor")
+  galleryImages      GalleryImage[]      @relation("UserToGallery")
+  homepageSections   HomepageSection[]
+  image              Image?              @relation("UserToImage")
   likes              Like[]
-  galleryImages      GalleryImage[]      @relation("UserToGallery") // Ảnh do User tải lên
+  news               News[]              @relation("NewsAuthor")
 
   @@map("users")
 }
@@ -36,45 +34,41 @@ model User {
 model Homepage {
   id        String            @id @default(uuid())
   name      String            @unique
-  sections  HomepageSection[]
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
+  sections  HomepageSection[]
 
   @@map("homepages")
 }
 
 model HomepageSection {
-  id         String   @id @default(uuid())
-  homepageId String
-  type       String // HeroSection, AboutSection, ...
-  name       String?
-  order      Int      @default(0)
-  enabled    Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  homepage Homepage @relation(fields: [homepageId], references: [id], onDelete: Cascade)
-  User     User?    @relation(fields: [userId], references: [id])
-  userId   String?
-
-  // Relationships to specific section types
-  hero          HeroSection?
-  about         AboutSection?
-  events        EventsSection?
-  news          NewsSection?
-  team          TeamSection?
-  gallery       GallerySection?
-  cta           CTASection?
+  id            String                @id @default(uuid())
+  homepageId    String
+  type          String
+  name          String?
+  order         Int                   @default(0)
+  enabled       Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  userId        String?
   aboutFeatures AboutFeatures?
+  about         AboutSection?
   countdown     CountdownTimer?
+  cta           CTASection?
+  events        EventsSection?
+  gallery       GallerySection?
+  hero          HeroSection?
+  homepage      Homepage              @relation(fields: [homepageId], references: [id], onDelete: Cascade)
+  User          User?                 @relation(fields: [userId], references: [id])
+  news          NewsSection?
   story         SportsCommunityStory?
   stats         StatsSection?
+  team          TeamSection?
 
   @@index([homepageId, order])
   @@map("homepage_sections")
 }
 
-// Models for specific section types
 model HeroSection {
   id                String          @id @default(uuid())
   title             String
@@ -86,8 +80,8 @@ model HeroSection {
   logo              String?
   primaryButtonText String
   showAnimations    Boolean         @default(true)
-  section           HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   sectionId         String          @unique
+  section           HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@map("hero_sections")
 }
@@ -96,10 +90,10 @@ model AboutSection {
   id              String          @id @default(uuid())
   title           String
   title1          String
-  description     String          @db.Text
+  description     String
   backgroundColor String?
-  section         HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   sectionId       String          @unique
+  section         HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@map("about_sections")
 }
@@ -108,11 +102,11 @@ model EventsSection {
   id                String          @id @default(uuid())
   title             String
   title1            String
-  description       String          @db.Text
+  description       String
   backgroundColor   String?
   showViewAllButton Boolean         @default(true)
-  section           HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   sectionId         String          @unique
+  section           HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@map("events_sections")
 }
@@ -121,11 +115,11 @@ model NewsSection {
   id                String          @id @default(uuid())
   title             String
   title1            String
-  description       String          @db.Text
+  description       String
   postsPerRow       Int             @default(3)
   showViewAllButton Boolean         @default(true)
-  section           HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   sectionId         String          @unique
+  section           HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@map("news_sections")
 }
@@ -133,11 +127,11 @@ model NewsSection {
 model TeamSection {
   id              String          @id @default(uuid())
   title           String
-  description     String          @db.Text
+  description     String
   backgroundColor String?
   membersPerRow   Int             @default(4)
-  section         HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   sectionId       String          @unique
+  section         HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@map("team_sections")
 }
@@ -147,8 +141,8 @@ model GallerySection {
   title        String
   autoPlay     Boolean         @default(false)
   showControls Boolean         @default(true)
-  section      HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   sectionId    String          @unique
+  section      HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@map("gallery_sections")
 }
@@ -156,21 +150,21 @@ model GallerySection {
 model CTASection {
   id              String          @id @default(uuid())
   title           String
-  description     String          @db.Text
+  description     String
   buttonText      String
   backgroundColor String?
-  section         HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   sectionId       String          @unique
+  section         HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@map("cta_sections")
 }
 
 model AboutFeatures {
   id            String          @id @default(uuid())
-  features      Json // Lưu mảng features
+  features      Json
   customClasses String?
-  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   sectionId     String          @unique
+  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@map("about_features")
 }
@@ -179,8 +173,8 @@ model CountdownTimer {
   id            String          @id @default(uuid())
   eventDate     String
   customClasses String?
-  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   sectionId     String          @unique
+  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@map("countdown_timers")
 }
@@ -189,72 +183,70 @@ model SportsCommunityStory {
   id            String          @id @default(uuid())
   subtitle      String
   title         String
-  paragraph1    String          @db.Text
-  paragraph2    String          @db.Text
-  paragraph3    String          @db.Text
-  paragraph4    String          @db.Text
+  paragraph1    String
+  paragraph2    String
+  paragraph3    String
+  paragraph4    String
   image         String
   statsValue    String
   statsLabel    String
   customClasses String?
-  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   sectionId     String          @unique
+  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@map("sports_community_stories")
 }
 
 model StatsSection {
   id            String          @id @default(uuid())
-  stats         Json // Lưu mảng stats
+  stats         Json
   customClasses String?
-  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   sectionId     String          @unique
+  section       HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@map("stats_sections")
 }
 
 model Image {
   id        String   @id @default(uuid())
-  url       String // Đường dẫn ảnh (ví dụ: /image/avatars/avatar_123.jpg hoặc /image/event_posts/event_123.jpg)
-  type      String // Loại ảnh (avatar, event_post, etc.)
-  user      User?    @relation("UserToImage", fields: [userId], references: [id], onDelete: SetNull)
+  url       String
+  type      String
   userId    String?  @unique
-  event     Event?   @relation("EventToImage", fields: [eventId], references: [id], onDelete: SetNull)
   eventId   String?  @unique
   createdAt DateTime @default(now())
+  event     Event?   @relation("EventToImage", fields: [eventId], references: [id])
+  user      User?    @relation("UserToImage", fields: [userId], references: [id])
 
   @@map("images")
 }
 
 model Event {
-  id                   String        @id @default(uuid())
+  id                   String              @id @default(uuid())
   name                 String
-  description          String        @db.Text
-  content              String        @db.Text
+  description          String
+  content              String
   date                 DateTime
   location             String
-  imageEvent           String? // Đường dẫn ảnh (sẽ lấy từ Image)
+  imageEvent           String?
   maxParticipants      Int
-  currentParticipants  Int           @default(0)
+  currentParticipants  Int                 @default(0)
   category             EventCategory
-  status               EventStatus   @default(UPCOMING)
+  status               EventStatus         @default(UPCOMING)
   distance             String?
-  registrationFee      Int?          @default(0)
-  requirements         String?       @db.Text
-  published            Boolean       @default(true)
-  featured             Boolean       @default(false)
+  registrationFee      Int?                @default(0)
+  requirements         String?
+  published            Boolean             @default(true)
+  featured             Boolean             @default(false)
   registrationDeadline DateTime?
   organizer            String?
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
-
-  // Relations
-  author        User                @relation("EventAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  authorId      String
-  imageId       String?             @unique
-  image         Image?              @relation("EventToImage")
-  registrations EventRegistration[]
-  galleryImages GalleryImage[]      @relation("EventToGallery") // Ảnh thuộc sự kiện này
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  authorId             String
+  imageId              String?             @unique
+  registrations        EventRegistration[]
+  author               User                @relation("EventAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  galleryImages        GalleryImage[]      @relation("EventToGallery")
+  image                Image?              @relation("EventToImage")
 
   @@map("events")
 }
@@ -266,114 +258,101 @@ model EventRegistration {
   phone             String
   emergencyContact  String
   emergencyPhone    String?
-  medicalConditions String?            @db.Text
+  medicalConditions String?
   experience        ExperienceLevel
   status            RegistrationStatus @default(PENDING)
   registeredAt      DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
-
-  // Relations
-  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  eventId String
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId  String
+  eventId           String
+  userId            String
+  event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, userId])
   @@map("event_registrations")
 }
 
-// Thêm model News
 model News {
   id          String       @id @default(uuid())
   title       String
-  excerpt     String       @db.Text
-  content     String       @db.Text
-  cover       String // Đường dẫn ảnh
-  author      User         @relation("NewsAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  excerpt     String
+  content     String
+  cover       String
   authorId    String
   category    NewsCategory
   views       Int          @default(0)
   featured    Boolean      @default(false)
   status      NewsStatus   @default(DRAFT)
-  tags        String?      @db.Text // Lưu tags dạng chuỗi ngăn cách bởi dấu phẩy
-  readingTime Int?         @default(5) // Thời gian đọc ước tính (phút)
+  tags        String?
+  readingTime Int?         @default(5)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-
-  // Relations
-  comments Comment[]
-  likes    Like[]
+  comments    Comment[]
+  likes       Like[]
+  author      User         @relation("NewsAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([category, featured])
   @@index([authorId])
   @@map("news")
 }
 
-// Model Comment - Bình luận cho bài viết
 model Comment {
   id        String        @id @default(uuid())
-  content   String        @db.Text
-  news      News          @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  content   String
   newsId    String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   status    CommentStatus @default(PENDING)
-  parentId  String? // Để hỗ trợ reply comments
+  parentId  String?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+  news      News          @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([newsId])
   @@index([userId])
   @@map("comments")
 }
 
-// Model Like - Lưu trữ lượt thích
 model Like {
   id        String   @id @default(uuid())
-  news      News     @relation(fields: [newsId], references: [id], onDelete: Cascade)
   newsId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   createdAt DateTime @default(now())
+  news      News     @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([newsId, userId]) // Mỗi user chỉ có thể thích một bài viết một lần
+  @@unique([newsId, userId])
   @@map("likes")
 }
 
-// Thêm enum GalleryCategory
-enum GalleryCategory {
-  MARATHON
-  FUN_RUN
-  TRAIL_RUN
-  NIGHT_RUN
-}
-
-// Thêm model GalleryImage
 model GalleryImage {
   id           String          @id @default(uuid())
-  src          String // Đường dẫn ảnh
+  src          String
   title        String
-  event        String // Tên sự kiện
-  location     String // Địa điểm
+  event        String
+  location     String
   year         Int
   category     GalleryCategory
-  description  String?         @db.Text
+  description  String?
   participants Int?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
-
-  // Relations - Liên kết với Event
-  eventRelated Event?  @relation("EventToGallery", fields: [eventId], references: [id], onDelete: SetNull)
   eventId      String?
-
-  // Relations - Liên kết với User (người đăng ảnh)
-  uploadedBy   User?   @relation("UserToGallery", fields: [uploadedById], references: [id], onDelete: SetNull)
   uploadedById String?
+  eventRelated Event?          @relation("EventToGallery", fields: [eventId], references: [id])
+  uploadedBy   User?           @relation("UserToGallery", fields: [uploadedById], references: [id])
 
   @@index([category])
   @@index([year])
   @@index([eventId])
   @@map("gallery_images")
+}
+
+enum GalleryCategory {
+  MARATHON
+  FUN_RUN
+  TRAIL_RUN
+  NIGHT_RUN
 }
 
 enum Role {
@@ -412,7 +391,6 @@ enum RegistrationStatus {
   CANCELLED
 }
 
-// Thêm enum cho News
 enum NewsCategory {
   TRAINING
   NUTRITION

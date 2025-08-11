@@ -78,4 +78,11 @@ export class PrismaService
       return false;
     }
   }
+
+   // ✅ Thêm method này
+  async enableShutdownHooks(app: INestApplication) {
+    this.$on<any>('beforeExit', async () => {
+      await app.close();
+    });
+  }
 }

@@ -5,9 +5,9 @@ import { ConfigService } from "@nestjs/config";
 import { AppModule } from "./app.module";
 import * as express from 'express';
 import { join } from 'path';
+import { PrismaService } from "./prisma/prisma.service"; // ✅ Thêm import này
 
 async function bootstrap() {
-  // Tạo một logger instance và bật chế độ debug
   const logger = new Logger('Bootstrap');
   
   const app = await NestFactory.create(AppModule, {
@@ -15,6 +15,10 @@ async function bootstrap() {
   });
   
   const configService = app.get(ConfigService);
+
+  // ✅ Đảm bảo Prisma đóng connection khi app shutdown
+  const prismaService = app.get(PrismaService);
+  await prismaService.enableShutdownHooks(app);
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -28,7 +32,7 @@ async function bootstrap() {
     }),
   );
   
-  // CORS configuration
+  // CORS
   app.enableCors({
     origin: configService.get("CORS_ORIGIN")?.split(",") || [
       "http://localhost:3000",
@@ -41,7 +45,7 @@ async function bootstrap() {
   // Global prefix
   app.setGlobalPrefix("api/v1");
 
-  // Swagger documentation
+  // Swagger
   if (configService.get("NODE_ENV") !== "production") {
     const config = new DocumentBuilder()
       .setTitle("VSM API")
@@ -60,7 +64,7 @@ async function bootstrap() {
     SwaggerModule.setup("api/docs", app, document);
   }
 
-  //import image
+  // Static files
   app.use('/image', express.static(join(__dirname, '..', 'public', 'image')));
 
   const port = process.env.PORT || configService.get("PORT") || 3001;

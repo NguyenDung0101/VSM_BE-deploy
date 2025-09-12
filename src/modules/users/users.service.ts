@@ -11,6 +11,11 @@ import { UploadService } from '../upload/upload.service';
 export class UsersService {
   constructor(private prisma: PrismaService, private uploadService: UploadService,) {}
 
+    // Expose prisma for direct access
+    get prismaClient() {
+      return this.prisma;
+    }
+
   // Common methods
   async create(createUserDto: CreateUserDto) {
   // The password is already hashed in AuthService, so we don't need to hash it again
@@ -97,8 +102,13 @@ export class UsersService {
         id: true,
         name: true,
         email: true,
+        password: true,
+        phone: true,
         avatar: true,
+        avatarId: true,
         role: true,
+        provider: true,
+        isVerified: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,

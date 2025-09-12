@@ -18,3 +18,23 @@ export class LoginDto {
   @IsNotEmpty()
   password: string;
 }
+
+export class GoogleLoginDto {
+  @ApiProperty({
+    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    description: "Supabase access token from Google OAuth",
+  })
+  @IsString()
+  @IsNotEmpty()
+  access_token: string;
+}
+
+export class RefreshTokenDto {
+  @ApiProperty({
+    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    description: "Refresh token",
+  })
+  @IsString()
+  @IsNotEmpty()
+  refreshToken: string;
+}

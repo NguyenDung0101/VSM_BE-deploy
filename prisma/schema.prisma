@@ -11,7 +11,7 @@ model User {
   id                 String              @id @default(uuid())
   name               String
   email              String              @unique
-  password           String
+  password           String?
   phone              String?
   avatar             String?
   avatarId           String?             @unique
@@ -19,6 +19,9 @@ model User {
   isActive           Boolean             @default(true)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  isVerified         Boolean             @default(false)
+  provider           String              @default("local")
+  verificationToken  String?
   comments           Comment[]
   eventRegistrations EventRegistration[]
   events             Event[]             @relation("EventAuthor")

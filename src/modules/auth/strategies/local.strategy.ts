@@ -13,8 +13,9 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
 
   async validate(email: string, password: string): Promise<any> {
     const user = await this.authService.validateUser(email, password);
+    // Dòng này dùng để kiểm tra xem user có tồn tại không
     if (!user) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException(); // Nếu user không tồn tại thì throw error
     }
     return user;
   }

@@ -5,16 +5,20 @@ import {
   ForbiddenException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
+import { createClient } from "@supabase/supabase-js";
 import * as bcrypt from "bcryptjs";
 import { UsersService } from "../users/users.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
+import { GoogleLoginDto } from "./dto/login.dto";
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
   async validateUser(email: string, password: string): Promise<any> {
@@ -25,12 +29,17 @@ export class AuthService {
       return null;
     }
   
-    // Debug mật khẩu
-    console.log("🔍 Password in DB (should be hash):", user.password);
-    console.log("🔍 Password entered by user:", password);
-  
-    const isMatch = await bcrypt.compare(password, user.password);
-    console.log("🔍 Password match result:", isMatch);
+        // Debug mật khẩu
+        console.log("🔍 Password in DB (should be hash):", user.password);
+        console.log("🔍 Password entered by user:", password);
+      
+        if (!user.password) {
+          console.log("🔍 No password set for user");
+          return null;
+        }
+        
+        const isMatch = await bcrypt.compare(password, user.password);
+        console.log("🔍 Password match result:", isMatch);
   
     if (isMatch) {
       // Xoá password trước khi return (không cần toObject)
@@ -74,17 +83,17 @@ export class AuthService {
   // Register method for creating new users
  async register(registerDto: RegisterDto, user: any) {
   // Validate email domain
-  if (!registerDto.email.endsWith('@vsm.org.vn')) {
-    throw new UnauthorizedException("Email must end with @vsm.org.vn");
-  }
+  // if (!registerDto.email.endsWith('@vsm.org.vn')) {
+  //   throw new UnauthorizedException("Email must end with @vsm.org.vn");
+  // }
 
   // Check if user already exists
   const existingUser = await this.usersService.findByEmail(registerDto.email);
   if (existingUser) {
-    throw new ConflictException("User with this email already exists");
+    throw new ConflictException("Người dùng với tài khoản email này đã tồn tại");
   }
 
-  // Determine who is registering
+  // Kiểm tra xem ai đang đăng ký
   let roleToAssign = registerDto.role; // Role from DTO, if provided by admin
   if (!user) {
     // User self-registration (no authenticated user)
@@ -100,7 +109,7 @@ export class AuthService {
     if (user.role !== 'ADMIN' && roleToAssign) {
       throw new UnauthorizedException("Only admins can assign roles");
     }
-    // Admin can assign any role, or keep default USER if not specified
+    // Admin có thể gán bất kỳ role nào, hoặc giữ default USER nếu không được chỉ định
     roleToAssign = roleToAssign || 'USER';
     if (roleToAssign && !['ADMIN', 'EDITOR', 'USER'].includes(roleToAssign)) {
       throw new UnauthorizedException("Invalid role assigned");
@@ -162,9 +171,9 @@ console.log("Hashed password:", hashedPassword);
     }
 
     // Validate email domain
-    if (!registerDto.email.endsWith('@vsm.org.vn')) {
-      throw new UnauthorizedException("Email must end with @vsm.org.vn");
-    }
+    // if (!registerDto.email.endsWith('@vsm.org.vn')) {
+    //   throw new UnauthorizedException("Email must end with @vsm.org.vn");
+    // }
 
     // Check if user already exists
     const existingUser = await this.usersService.findByEmail(registerDto.email);
@@ -228,5 +237,144 @@ console.log("Hashed password:", hashedPassword);
       success: true,
       message: 'Password has been reset successfully',
     };
+  }
+
+    // Google OAuth login method
+    async googleLogin(googleLoginDto: GoogleLoginDto) {
+      const { access_token } = googleLoginDto;
+  
+      try {
+        console.log('�� Starting Google OAuth login...');
+        
+        // Verify the Supabase JWT token
+        const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
+        const supabaseKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
+        
+        if (!supabaseUrl || !supabaseKey) {
+          throw new UnauthorizedException('Supabase configuration missing');
+        }
+        
+        const supabase = createClient(supabaseUrl, supabaseKey);
+  
+        // Get user info from Supabase using the access token
+        const { data: { user }, error } = await supabase.auth.getUser(access_token);
+  
+        if (error || !user) {
+          console.error('❌ Supabase auth error:', error);
+          throw new UnauthorizedException('Invalid Google access token');
+        }
+  
+        // Extract user information from Google OAuth
+        const { email, user_metadata } = user;
+        const name = user_metadata?.full_name || user_metadata?.name || email;
+        const avatar = user_metadata?.avatar_url || user_metadata?.picture;
+  
+        console.log('🔍 Google user data:', { email, name, avatar });
+  
+        if (!email) {
+          throw new UnauthorizedException('Email not found in Google account');
+        }
+  
+        // Check if user already exists
+        let existingUser = await this.usersService.findByEmail(email);
+        console.log('🔍 Existing user found:', existingUser ? 'Yes' : 'No');
+  
+        if (existingUser) {
+          console.log('🔍 Updating existing user...');
+          // Update existing user if provider is not Google
+          if (existingUser.provider !== 'google') {
+            existingUser = await this.usersService.prismaClient.user.update({
+              where: { id: existingUser.id },
+              data: {
+                provider: 'google',
+                avatar: avatar || existingUser.avatar,
+                isVerified: true,
+                verificationToken: null,
+              },
+            });
+            console.log('✅ User updated successfully');
+          }
+        } else {
+          console.log('🔍 Creating new user...');
+          // Create new user with Google provider
+          const userData = {
+            name,
+            email,
+            password: '', // Empty string instead of null for Google OAuth users
+            avatar,
+            provider: 'google',
+            isVerified: true,
+            role: 'USER' as const,
+          };
+  
+          existingUser = await this.usersService.create(userData);
+          console.log('✅ User created successfully:', existingUser.id);
+        }
+  
+        if (!existingUser || !existingUser.isActive) {
+          throw new UnauthorizedException('Account is deactivated');
+        }
+  
+        // Generate JWT tokens
+        const payload = {
+          sub: existingUser.id,
+          email: existingUser.email,
+          role: existingUser.role,
+        };
+  
+        const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+        const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+  
+        console.log('✅ Google OAuth login successful');
+        return {
+          user: {
+            id: existingUser.id,
+            name: existingUser.name,
+            email: existingUser.email,
+            avatar: existingUser.avatar,
+            role: existingUser.role,
+          },
+          accessToken,
+          refreshToken,
+        };
+      } catch (error) {
+        console.error('❌ Google OAuth error:', error);
+        throw new UnauthorizedException('Google OAuth authentication failed');
+      }
+    }    
+
+  // Refresh token method
+  async refreshToken(token: string) {
+    try {
+      const decoded = this.jwtService.verify(token);
+      const user = await this.usersService.findById(decoded.sub);
+
+      if (!user || !user.isActive) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+      };
+
+      const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+      const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+      return {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          role: user.role,
+        },
+        accessToken,
+        refreshToken,
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 }

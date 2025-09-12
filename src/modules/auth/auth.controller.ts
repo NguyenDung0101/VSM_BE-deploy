@@ -2,7 +2,7 @@ import { Controller, Post, Body, Get, Req, UseGuards, UnauthorizedException } fr
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { AuthService } from "./auth.service";
-import { LoginDto } from "./dto/login.dto";
+import { LoginDto, GoogleLoginDto, RefreshTokenDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 import * as bcryptjs from 'bcryptjs';
 
@@ -31,19 +31,21 @@ export class AuthController {
       };
     }
     
-    // Kiểm tra định dạng mật khẩu
-    let hashInfo = 'Not a valid bcrypt hash';
-    if (user.password.startsWith('$2')) {
-      hashInfo = 'Valid bcrypt hash';
-    }
-    
-    // Kiểm tra mật khẩu
-    let passwordMatch = false;
-    try {
-      passwordMatch = await bcryptjs.compare(password, user.password);
-    } catch (error) {
-      hashInfo = `Error: ${error.message}`;
-    }
+        // Kiểm tra định dạng mật khẩu
+        let hashInfo = 'Not a valid bcrypt hash';
+        if (user.password && user.password.startsWith('$2')) {
+          hashInfo = 'Valid bcrypt hash';
+        }
+        
+        // Kiểm tra mật khẩu
+        let passwordMatch = false;
+        try {
+          if (user.password) {
+            passwordMatch = await bcryptjs.compare(password, user.password);
+          }
+        } catch (error) {
+          hashInfo = `Error: ${error.message}`;
+        }
     
     return {
       exists: true,
@@ -86,5 +88,15 @@ export class AuthController {
   @Get("profile")
   async getProfile(@Req() req) {
     return this.authService.getProfile(req.user.sub);
+  }
+
+  @Post("google-login")
+  async googleLogin(@Body() googleLoginDto: GoogleLoginDto) {
+    return this.authService.googleLogin(googleLoginDto);
+  }
+
+  @Post("refresh")
+  async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.refreshToken(refreshTokenDto.refreshToken);
   }
 }

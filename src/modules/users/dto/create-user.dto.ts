@@ -53,21 +53,22 @@ export class CreateUserDto {
   @IsEnum(Role)
   role?: Role;
 
-  @ApiProperty({
-    example: true,
-    description: "Whether the user is active",
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
 
-  @ApiProperty({
-    example: "0912345678",
-    description: "Số điện thoại người dùng",
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  phone?: string;
+@ApiProperty({
+  example: "google",
+  description: "Authentication provider (local or google)",
+  required: false,
+})
+@IsOptional()
+@IsString()
+provider?: string;
+
+@ApiProperty({
+  example: true,
+  description: "Whether the user is verified",
+  required: false,
+})
+@IsOptional()
+@IsBoolean()
+isVerified?: boolean;
 }

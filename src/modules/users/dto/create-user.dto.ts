@@ -53,22 +53,58 @@ export class CreateUserDto {
   @IsEnum(Role)
   role?: Role;
 
+  @ApiProperty({
+    example: "google",
+    description: "Authentication provider (local or google)",
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  provider?: string;
 
-@ApiProperty({
-  example: "google",
-  description: "Authentication provider (local or google)",
-  required: false,
-})
-@IsOptional()
-@IsString()
-provider?: string;
+  @ApiProperty({
+    example: true,
+    description: "Whether the user is verified",
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isVerified?: boolean;
 
-@ApiProperty({
-  example: true,
-  description: "Whether the user is verified",
-  required: false,
-})
-@IsOptional()
-@IsBoolean()
-isVerified?: boolean;
+  // Thêm các field cho Supabase
+  @ApiProperty({
+    example: "123e4567-e89b-12d3-a456-426614174000",
+    description: "Supabase user ID",
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  supabaseUserId?: string;
+
+  @ApiProperty({
+    example: true,
+    description: "Whether the email is verified",
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  emailVerified?: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: "Whether the user wants to receive newsletter",
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  newsletter?: boolean;
+
+  @ApiProperty({
+    example: true,
+    description: "Whether the user account is active",
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

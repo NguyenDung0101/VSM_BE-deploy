@@ -83,6 +83,29 @@ export class AuthController {
     return this.authService.createAccount(registerDto, req.user);
   }
 
+  // Endpoint để đăng ký user từ Supabase với OTP
+  @Post("register-supabase")
+  async registerSupabase(@Body() data: {
+    email: string;
+    password: string;
+    name: string;
+    newsletter?: boolean;
+  }) {
+    return this.authService.registerSupabaseWithOTP(data);
+  }
+
+  // Endpoint để gửi OTP
+  @Post("send-otp")
+  async sendOTP(@Body() data: { email: string }) {
+    return this.authService.sendOTP(data.email);
+  }
+
+  // Endpoint để verify OTP
+  @Post("verify-otp")
+  async verifyOTP(@Body() data: { email: string; otp: string }) {
+    return this.authService.verifyOTP(data.email, data.otp);
+  }
+
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get("profile")

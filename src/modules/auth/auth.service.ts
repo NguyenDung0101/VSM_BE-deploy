@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ConflictException,
   ForbiddenException,
+  BadRequestException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
@@ -12,6 +13,7 @@ import { UsersService } from "../users/users.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { GoogleLoginDto } from "./dto/login.dto";
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class AuthService {
@@ -241,7 +243,7 @@ console.log("Hashed password:", hashedPassword);
 
     // Google OAuth login method
     async googleLogin(googleLoginDto: GoogleLoginDto) {
-      const { access_token } = googleLoginDto;
+      const { access_token } = googleLoginDto; // Dùng access_token để lấy thông tin user từ Supabase
   
       try {
         console.log('�� Starting Google OAuth login...');
@@ -254,7 +256,7 @@ console.log("Hashed password:", hashedPassword);
           throw new UnauthorizedException('Supabase configuration missing');
         }
         
-        const supabase = createClient(supabaseUrl, supabaseKey);
+        const supabase = createClient(supabaseUrl, supabaseKey); // Tạo client Supabase
   
         // Get user info from Supabase using the access token
         const { data: { user }, error } = await supabase.auth.getUser(access_token);
@@ -375,6 +377,242 @@ console.log("Hashed password:", hashedPassword);
       };
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
+    }
+  }
+
+  // Method để đăng ký user từ Supabase
+  async registerSupabase(data: {
+    supabase_user_id: string;
+    email: string;
+    name: string;
+    newsletter?: boolean;
+    email_verified?: boolean;
+  }) {
+    try {
+      // Kiểm tra xem user đã tồn tại chưa
+      const existingUser = await this.usersService.findByEmail(data.email);
+      
+      if (existingUser) {
+        // Nếu user đã tồn tại, cập nhật thông tin Supabase ID
+        const updatedUser = await this.usersService.update(existingUser.id, {
+          supabaseUserId: data.supabase_user_id,
+          emailVerified: data.email_verified || false,
+        });
+
+        // Tạo JWT token
+        const payload = {
+          sub: updatedUser.id,
+          email: updatedUser.email,
+          role: updatedUser.role,
+        };
+
+        const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+        const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+        return {
+          user: {
+            id: updatedUser.id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            avatar: updatedUser.avatar,
+            role: updatedUser.role,
+          },
+          accessToken,
+          refreshToken,
+        };
+      }
+
+      // Tạo user mới
+      const newUser = await this.usersService.create({
+        name: data.name,
+        email: data.email,
+        password: '', // Không cần password cho Supabase user
+        role: 'USER',
+        supabaseUserId: data.supabase_user_id,
+        emailVerified: data.email_verified || false,
+        newsletter: data.newsletter || false,
+        isActive: true,
+      });
+
+      // Tạo JWT token
+      const payload = {
+        sub: newUser.id,
+        email: newUser.email,
+        role: newUser.role,
+      };
+
+      const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+      const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+      return {
+        user: {
+          id: newUser.id,
+          name: newUser.name,
+          email: newUser.email,
+          avatar: newUser.avatar,
+          role: newUser.role,
+        },
+        accessToken,
+        refreshToken,
+      };
+    } catch (error) {
+      console.error('Error in registerSupabase:', error);
+      throw new ConflictException('Failed to register user from Supabase');
+    }
+  }
+
+  // Method để đăng ký user từ Supabase với OTP
+  async registerSupabaseWithOTP(data: {
+    email: string;
+    password: string;
+    name: string;
+    newsletter?: boolean;
+  }) {
+    try {
+      // Kiểm tra xem user đã tồn tại chưa
+      const existingUser = await this.usersService.findByEmail(data.email);
+      
+      if (existingUser) {
+        throw new ConflictException("Email đã được sử dụng");
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(data.password, 10);
+
+      // Tạo user mới nhưng chưa active
+      const newUser = await this.usersService.create({
+        name: data.name,
+        email: data.email,
+        password: hashedPassword,
+        role: 'USER',
+        emailVerified: false,
+        newsletter: data.newsletter || false,
+        isActive: false, // Chưa active cho đến khi verify OTP
+      });
+
+      // Gửi OTP
+      await this.sendOTP(data.email);
+
+      return {
+        message: "Đăng ký thành công. Mã OTP đã được gửi đến email của bạn.",
+        userId: newUser.id,
+      };
+    } catch (error) {
+      console.error('Error in registerSupabaseWithOTP:', error);
+      throw error;
+    }
+  }
+
+  // Method để gửi OTP
+  async sendOTP(email: string) {
+    try {
+      // Tạo mã OTP 6 chữ số
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Lưu OTP vào database với thời gian hết hạn (10 phút)
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
+      
+      // Tìm user theo email
+      const user = await this.usersService.findByEmail(email);
+      if (!user) {
+        throw new BadRequestException("Email không tồn tại");
+      }
+
+      // Cập nhật OTP và thời gian hết hạn
+      await this.usersService.update(user.id, {
+        verificationToken: otp,
+        // Có thể thêm field expiresAt vào schema nếu cần
+      });
+
+      // Gửi email OTP (sử dụng service email hoặc Supabase)
+      await this.sendOTPEmail(email, otp);
+
+      return {
+        message: "Mã OTP đã được gửi đến email của bạn",
+        expiresIn: 600, // 10 phút
+      };
+    } catch (error) {
+      console.error('Error in sendOTP:', error);
+      throw error;
+    }
+  }
+
+  // Method để verify OTP
+  async verifyOTP(email: string, otp: string) {
+    try {
+      // Tìm user theo email
+      const user = await this.usersService.findByEmail(email);
+      if (!user) {
+        throw new BadRequestException("Email không tồn tại");
+      }
+
+      // Kiểm tra OTP
+      if (!user.verificationToken || user.verificationToken !== otp) {
+        throw new UnauthorizedException("Mã OTP không đúng");
+      }
+
+      // Kiểm tra thời gian hết hạn (có thể thêm logic kiểm tra thời gian)
+      // if (user.expiresAt && new Date() > user.expiresAt) {
+      //   throw new UnauthorizedException("Mã OTP đã hết hạn");
+      // }
+
+      // Cập nhật user: active và xóa OTP
+      const updatedUser = await this.usersService.update(user.id, {
+        isActive: true,
+        emailVerified: true,
+        verificationToken: null,
+      });
+
+      // Tạo JWT token
+      const payload = {
+        sub: updatedUser.id,
+        email: updatedUser.email,
+        role: updatedUser.role,
+      };
+
+      const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+      const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+      return {
+        user: {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          avatar: updatedUser.avatar,
+          role: updatedUser.role,
+        },
+        accessToken,
+        refreshToken,
+      };
+    } catch (error) {
+      console.error('Error in verifyOTP:', error);
+      throw error;
+    }
+  }
+
+  // Method để gửi email OTP (tạm thời log ra console)
+  private async sendOTPEmail(email: string, otp: string) {
+    try {
+      // TẠM THỜI: Log OTP ra console để test
+      console.log('='.repeat(50));
+      console.log(' EMAIL OTP FOR TESTING');
+      console.log('='.repeat(50));
+      console.log(`📧 To: ${email}`);
+      console.log(`🔐 OTP Code: ${otp}`);
+      console.log(`⏰ Expires in: 10 minutes`);
+      console.log('='.repeat(50));
+      
+      // TODO: Thay thế bằng email service thực tế
+      // Có thể sử dụng:
+      // - Nodemailer với SMTP
+      // - SendGrid
+      // - AWS SES
+      // - Supabase Edge Functions
+      
+      return true;
+    } catch (error) {
+      console.error('Error in sendOTPEmail:', error);
+      throw error;
     }
   }
 }

@@ -22,6 +22,10 @@ model User {
   isVerified         Boolean             @default(false)
   provider           String              @default("local")
   verificationToken  String?
+  // Thêm các field cho Supabase
+  supabaseUserId     String?             @unique
+  emailVerified      Boolean             @default(false)
+  newsletter         Boolean             @default(false)
   comments           Comment[]
   eventRegistrations EventRegistration[]
   events             Event[]             @relation("EventAuthor")

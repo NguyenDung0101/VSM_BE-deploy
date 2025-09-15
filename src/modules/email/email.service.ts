@@ -64,11 +64,20 @@ export class EmailService {
       });
     }
   }
-
+  
+  
   private initializeResend() {
-    // Disable Resend
-    console.log("🔍 Resend disabled - using SMTP only");
-    // this.resend = null;
+    const apiKey = this.configService.get<string>("RESEND_API_KEY");
+    if (apiKey) {
+      try {
+        this.resend = new Resend(apiKey);
+        this.logger.log("✅ Resend client initialized successfully");
+      } catch (err) {
+        this.logger.error("❌ Failed to initialize Resend client", err as any);
+      }
+    } else {
+      this.logger.warn("ℹ️ RESEND_API_KEY not set - Resend disabled");
+    }
   }
 
   // Method public để check status
@@ -86,6 +95,25 @@ export class EmailService {
 
       const subject = "Mã OTP xác thực tài khoản VSM";
       const htmlContent = this.generateOTPEmailHTML(otp, name);
+
+      // Thử gửi qua Resend trước nếu có
+      if (this.resend) {
+        console.log("📧 Attempting Resend...");
+        try {
+          const from = this.configService.get<string>("RESEND_FROM_EMAIL") || "VSM <noreply@vsm.dev>";
+          const result = await this.resend.emails.send({
+            from,
+            to: email,
+            subject,
+            html: htmlContent,
+          });
+          console.log("📧 Resend response:", result);
+          this.logger.log(`✅ OTP email sent via Resend to ${email}`);
+          return true;
+        } catch (resendError) {
+          console.log("❌ Resend failed:", resendError);
+        }
+      }
 
       // Chỉ sử dụng SMTP
       if (this.transporter) {
@@ -135,6 +163,25 @@ export class EmailService {
       const subject = "Xác minh email tài khoản VSM";
       const htmlContent = this.generateVerifyEmailHTML(verifyUrl, name);
 
+      // Thử gửi qua Resend trước nếu có
+      if (this.resend) {
+        console.log("📧 Attempting Resend...");
+        try {
+          const from = this.configService.get<string>("RESEND_FROM_EMAIL") || "VSM <noreply@vsm.dev>";
+          const result = await this.resend.emails.send({
+            from,
+            to: email,
+            subject,
+            html: htmlContent,
+          });
+          console.log("📧 Resend response:", result);
+          this.logger.log(`✅ Verification email sent via Resend to ${email}`);
+          return true;
+        } catch (resendError) {
+          console.log("❌ Resend failed:", resendError);
+        }
+      }
+
       if (this.transporter) {
         console.log("📧 Attempting SMTP...");
         const mailOptions = {
@@ -181,7 +228,7 @@ export class EmailService {
       <body>
         <div class="container">
           <div class="header">
-            <h1>🏃‍♂️ VSM - Vietnam Sports Marathon</h1>
+            <h1>🏃‍♂️ VSM - Vietnam Student Marathon</h1>
             <p>Xác thực tài khoản của bạn</p>
           </div>
           <div class="content">
@@ -233,7 +280,7 @@ export class EmailService {
       <body>
         <div class="container">
           <div class="header">
-            <h1>🏃‍♂️ VSM - Vietnam Sports Marathon</h1>
+            <h1>🏃‍♂️ VSM - Vietnam Student Marathon</h1>
             <p>Xác minh email của bạn</p>
           </div>
           <div class="content">
@@ -244,7 +291,7 @@ export class EmailService {
             <p>${verifyUrl}</p>
           </div>
           <div class="footer">
-            <p>© 2024 VSM - Vietnam Sports Marathon.</p>
+            <p>© 2024 VSM - Vietnam Student Marathon.</p>
           </div>
         </div>
       </body>

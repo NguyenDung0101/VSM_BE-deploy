@@ -13,7 +13,7 @@ import { UsersService } from "../users/users.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { GoogleLoginDto } from "./dto/login.dto";
-import * as nodemailer from 'nodemailer';
+import { EmailService } from "../email/email.service"; // Thêm import này
 
 @Injectable()
 export class AuthService {
@@ -21,7 +21,10 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
-  ) {}
+    private emailService: EmailService,
+  ) {
+    console.log("🔍 AuthService initialized with EmailService:", !!this.emailService);
+  }
 
   async validateUser(email: string, password: string): Promise<any> {
     const user = await this.usersService.findByEmail(email);
@@ -83,77 +86,137 @@ export class AuthService {
   }
 
   // Register method for creating new users
- async register(registerDto: RegisterDto, user: any) {
-  // Validate email domain
-  // if (!registerDto.email.endsWith('@vsm.org.vn')) {
-  //   throw new UnauthorizedException("Email must end with @vsm.org.vn");
-  // }
+  async register(registerDto: RegisterDto, user: any) {
+    // Validate email domain
+    // if (!registerDto.email.endsWith('@vsm.org.vn')) {
+    //   throw new UnauthorizedException("Email must end with @vsm.org.vn");
+    // }
 
-  // Check if user already exists
-  const existingUser = await this.usersService.findByEmail(registerDto.email);
-  if (existingUser) {
-    throw new ConflictException("Người dùng với tài khoản email này đã tồn tại");
+    // Check if user already exists
+    const existingUser = await this.usersService.findByEmail(registerDto.email);
+    if (existingUser) {
+      throw new ConflictException("Người dùng với tài khoản email này đã tồn tại");
+    }
+
+    // Kiểm tra xem ai đang đăng ký
+    let roleToAssign = registerDto.role; // Role from DTO, if provided by admin
+    if (!user) {
+      // User self-registration (no authenticated user)
+      if (roleToAssign) {
+        throw new UnauthorizedException("Regular users cannot assign roles");
+      }
+      roleToAssign = 'USER'; // Default role for self-registration
+
+      // Self-registration: tạo tài khoản chưa active và gửi link xác minh
+      const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
+      // Tạo token xác minh (sử dụng JWT ngắn hạn hoặc random string). Ở đây dùng random 6 số + timestamp
+      const verificationToken = `${Math.floor(100000 + Math.random() * 900000)}-${Date.now()}`;
+
+      const createdUser = await this.usersService.create({
+        name: registerDto.name,
+        email: registerDto.email,
+        password: hashedPassword,
+        avatar: registerDto.avatar,
+        role: roleToAssign,
+        isActive: false,
+        emailVerified: false,
+        verificationToken,
+      });
+
+      // Tạo link xác minh
+      const backendBaseUrl = this.configService.get<string>('BACKEND_PUBLIC_URL') || 'http://localhost:3001/api/v1';
+      const verifyUrl = `${backendBaseUrl}/auth/verify-email?token=${encodeURIComponent(verificationToken)}`;
+
+      // Gửi email xác minh
+      await this.emailService.sendVerificationEmail(registerDto.email, verifyUrl, registerDto.name);
+
+      return {
+        message: "Đăng ký thành công. Vui lòng kiểm tra email để xác minh tài khoản.",
+        userId: createdUser.id,
+      };
+    } else {
+      // Admin or Editor attempting to create account
+      if (user.role === 'EDITOR') {
+        throw new ForbiddenException("Editors cannot create accounts");
+      }
+      if (user.role !== 'ADMIN' && roleToAssign) {
+        throw new UnauthorizedException("Only admins can assign roles");
+      }
+      // Admin có thể gán bất kỳ role nào, hoặc giữ default USER nếu không được chỉ định
+      roleToAssign = roleToAssign || 'USER';
+      if (roleToAssign && !['ADMIN', 'EDITOR', 'USER'].includes(roleToAssign)) {
+        throw new UnauthorizedException("Invalid role assigned");
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
+      // Create user data with only necessary fields
+      const userData = {
+        name: registerDto.name,
+        email: registerDto.email,
+        password: hashedPassword,
+        avatar: registerDto.avatar,
+        role: roleToAssign,
+      };
+
+      // Create user (rename 'user' to 'createdUser' to avoid conflict)
+      const createdUser = await this.usersService.create(userData);
+
+      // Generate token
+      const payload = {
+        sub: createdUser.id,
+        email: createdUser.email,
+        role: createdUser.role,
+      };
+
+      return {
+        access_token: this.jwtService.sign(payload),
+        user: {
+          id: createdUser.id,
+          name: createdUser.name,
+          email: createdUser.email,
+          avatar: createdUser.avatar,
+          role: createdUser.role,
+        },
+      };
+    }
   }
 
-  // Kiểm tra xem ai đang đăng ký
-  let roleToAssign = registerDto.role; // Role from DTO, if provided by admin
-  if (!user) {
-    // User self-registration (no authenticated user)
-    if (roleToAssign) {
-      throw new UnauthorizedException("Regular users cannot assign roles");
+  // Xác minh email từ token
+  async verifyEmailToken(token: string) {
+    if (!token) {
+      throw new BadRequestException('Token không hợp lệ');
     }
-    roleToAssign = 'USER'; // Default role for self-registration
-  } else {
-    // Admin or Editor attempting to create account
-    if (user.role === 'EDITOR') {
-      throw new ForbiddenException("Editors cannot create accounts");
+
+    // Tìm user theo verificationToken
+    const user = await this.usersService.prismaClient.user.findFirst({
+      where: { verificationToken: token },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Token không hợp lệ hoặc đã được sử dụng');
     }
-    if (user.role !== 'ADMIN' && roleToAssign) {
-      throw new UnauthorizedException("Only admins can assign roles");
-    }
-    // Admin có thể gán bất kỳ role nào, hoặc giữ default USER nếu không được chỉ định
-    roleToAssign = roleToAssign || 'USER';
-    if (roleToAssign && !['ADMIN', 'EDITOR', 'USER'].includes(roleToAssign)) {
-      throw new UnauthorizedException("Invalid role assigned");
-    }
+
+    // Cập nhật user: active, emailVerified, xoá token
+    const updatedUser = await this.usersService.update(user.id, {
+      isActive: true,
+      emailVerified: true,
+      verificationToken: null,
+    });
+
+    return {
+      message: 'Email đã được xác minh thành công',
+      user: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        avatar: updatedUser.avatar,
+        role: updatedUser.role,
+      },
+    };
   }
-
-  console.log("=== REGISTER DEBUG ===");
-console.log("Raw password:", registerDto.password);
-  // Hash password
-  const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-console.log("Hashed password:", hashedPassword);
-
-  // Create user data with only necessary fields
-  const userData = {
-    name: registerDto.name,
-    email: registerDto.email,
-    password: hashedPassword,
-    avatar: registerDto.avatar,
-    role: roleToAssign,
-  };
-
-  // Create user (rename 'user' to 'createdUser' to avoid conflict)
-  const createdUser = await this.usersService.create(userData);
-
-  // Generate token
-  const payload = {
-    sub: createdUser.id,
-    email: createdUser.email,
-    role: createdUser.role,
-  };
-
-  return {
-    access_token: this.jwtService.sign(payload),
-    user: {
-      id: createdUser.id,
-      name: createdUser.name,
-      email: createdUser.email,
-      avatar: createdUser.avatar,
-      role: createdUser.role,
-    },
-  };
-}
 
   // Method to get user profile
   async getProfile(userId: string) {
@@ -590,29 +653,33 @@ console.log("Hashed password:", hashedPassword);
     }
   }
 
-  // Method để gửi email OTP (tạm thời log ra console)
-  private async sendOTPEmail(email: string, otp: string) {
-    try {
-      // TẠM THỜI: Log OTP ra console để test
-      console.log('='.repeat(50));
-      console.log(' EMAIL OTP FOR TESTING');
-      console.log('='.repeat(50));
-      console.log(`📧 To: ${email}`);
-      console.log(`🔐 OTP Code: ${otp}`);
-      console.log(`⏰ Expires in: 10 minutes`);
-      console.log('='.repeat(50));
-      
-      // TODO: Thay thế bằng email service thực tế
-      // Có thể sử dụng:
-      // - Nodemailer với SMTP
-      // - SendGrid
-      // - AWS SES
-      // - Supabase Edge Functions
-      
-      return true;
-    } catch (error) {
-      console.error('Error in sendOTPEmail:', error);
-      throw error;
+  // Method để gửi email OTP
+private async sendOTPEmail(email: string, otp: string, name?: string): Promise<boolean> {
+  try {
+    console.log(`🚀 AuthService: Starting OTP email send to: ${email}`);
+    console.log(`🔍 AuthService: Email service status:`, this.emailService.getServiceStatus());
+    
+    // Gọi method public của EmailService
+    const success = await this.emailService.sendOTPEmail(email, otp, name);
+    
+    if (success) {
+      console.log(`✅ AuthService: OTP email sent successfully to ${email}`);
+    } else {
+      console.log(`❌ AuthService: Failed to send OTP email to ${email}`);
     }
+    
+    return success;
+  } catch (error) {
+    console.error(`❌ AuthService: Email send failed for ${email}:`, error);
+    // Fallback: log ra console để test
+    console.log('='.repeat(50));
+    console.log(' EMAIL OTP FOR TESTING');
+    console.log('='.repeat(50));
+    console.log(`📧 To: ${email}`);
+    console.log(`🔐 OTP Code: ${otp}`);
+    console.log(`⏰ Expires in: 10 minutes`);
+    console.log('='.repeat(50));
+    return true;
   }
+}
 }

@@ -25,7 +25,7 @@ export class RegisterDto {
   })
   @IsEmail()
   @IsNotEmpty()
-  @Matches(/@vsm\.org\.vn$/, { message: "Email must end with @vsm.org.vn" })
+  // @Matches(/@vsm\.org\.vn$/, { message: "Email must end with @vsm.org.vn" })
   email: string;
 
   @ApiProperty({

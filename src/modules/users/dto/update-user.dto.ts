@@ -43,4 +43,8 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  // Thêm field hết hạn OTP
+  @IsOptional()
+  otpExpiresAt?: Date | null;
 }

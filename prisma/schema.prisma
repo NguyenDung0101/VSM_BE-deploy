@@ -22,6 +22,7 @@ model User {
   isVerified         Boolean             @default(false)
   provider           String              @default("local")
   verificationToken  String?
+  otpExpiresAt       DateTime? // Thêm field này để quản lý thời gian hết hạn OTP
   // Thêm các field cho Supabase
   supabaseUserId     String?             @unique
   emailVerified      Boolean             @default(false)

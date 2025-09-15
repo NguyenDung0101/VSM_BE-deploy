@@ -5,6 +5,7 @@ import { AuthService } from "./auth.service";
 import { LoginDto, GoogleLoginDto, RefreshTokenDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 import * as bcryptjs from 'bcryptjs';
+import { Query } from '@nestjs/common';
 
 @ApiTags("auth")
 @Controller("auth")
@@ -104,6 +105,12 @@ export class AuthController {
   @Post("verify-otp")
   async verifyOTP(@Body() data: { email: string; otp: string }) {
     return this.authService.verifyOTP(data.email, data.otp);
+  }
+
+  // Verify email by token sent via link
+  @Get('verify-email')
+  async verifyEmail(@Query('token') token: string) {
+    return this.authService.verifyEmailToken(token);
   }
 
   @ApiBearerAuth()

@@ -107,4 +107,13 @@ export class CreateUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiProperty({
+    example: "123456-1712345678901",
+    description: "Verification token for email confirmation",
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  verificationToken?: string | null;
 }
